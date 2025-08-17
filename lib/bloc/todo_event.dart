@@ -1,60 +1,23 @@
-import 'package:equatable/equatable.dart';
 
-import '../models/todo.dart';
+import '../models/task.dart';
 
-abstract class TodoEvent extends Equatable {
-  const TodoEvent();
-
-  @override
-  List<Object> get props => [];
-}
+abstract class TodoEvent {}
 
 class LoadTodos extends TodoEvent {}
 
 class AddTodo extends TodoEvent {
   final String title;
-  final String description;
-
-  const AddTodo({required this.title, required this.description});
-
-  @override
-  List<Object> get props => [title, description];
-}
-
-class UpdateTodo extends TodoEvent {
-  final Todo todo;
-
-  const UpdateTodo({required this.todo});
-
-  @override
-  List<Object> get props => [todo];
-}
-
-class DeleteTodo extends TodoEvent {
-  final String id;
-
-  const DeleteTodo({required this.id});
-
-  @override
-  List<Object> get props => [id];
+  AddTodo(this.title);
 }
 
 class ToggleTodo extends TodoEvent {
-  final String id;
-
-  const ToggleTodo({required this.id});
-
-  @override
-  List<Object> get props => [id];
+  final int id;
+  ToggleTodo(this.id);
 }
 
-class FilterTodos extends TodoEvent {
-  final TodoFilter filter;
-
-  const FilterTodos({required this.filter});
-
-  @override
-  List<Object> get props => [filter];
+class DeleteTodo extends TodoEvent {
+  final int id;
+  DeleteTodo(this.id);
 }
 
-enum TodoFilter { all, active, completed }
+class ClearAllTodos extends TodoEvent {}

@@ -1,153 +1,109 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
+import '../bloc/theme_cubit.dart';
 import '../bloc/todo_bloc.dart';
 import '../bloc/todo_event.dart';
 import '../bloc/todo_state.dart';
-import '../utils/constants.dart';
-import '../widgets/add_todo_dailog.dart';
-import '../widgets/todo_item.dart';
+import '../widgets/task_item.dart';
 
-class TodoScreen extends StatelessWidget {
+class TodoScreen extends StatefulWidget {
+  const TodoScreen({super.key});
+
+  @override
+  State<TodoScreen> createState() => _TodoScreenState();
+}
+
+class _TodoScreenState extends State<TodoScreen> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<TodoBloc>().add(LoadTodos());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Todo App'),
-        backgroundColor: AppColors.primary,
-        elevation: 0,
+        title: const Text('BLoC Todo'),
         actions: [
-          PopupMenuButton<TodoFilter>(
-            onSelected: (filter) {
-              context.read<TodoBloc>().add(FilterTodos(filter: filter));
-            },
-            itemBuilder:
-                (context) => [
-                  PopupMenuItem(value: TodoFilter.all, child: Text('All')),
-                  PopupMenuItem(
-                    value: TodoFilter.active,
-                    child: Text('Active'),
-                  ),
-                  PopupMenuItem(
-                    value: TodoFilter.completed,
-                    child: Text('Completed'),
-                  ),
-                ],
+          IconButton(
+            tooltip: 'Toggle Theme',
+            onPressed: () => context.read<ThemeCubit>().toggle(),
+            icon: const Icon(Icons.brightness_6),
           ),
+          IconButton(
+            tooltip: 'Clear All',
+            onPressed: () => context.read<TodoBloc>().add(ClearAllTodos()),
+            icon: const Icon(Icons.delete_sweep),
+          )
         ],
       ),
       body: BlocBuilder<TodoBloc, TodoState>(
         builder: (context, state) {
-          if (state is TodoLoading) {
-            return Center(child: CircularProgressIndicator());
-          } else if (state is TodoLoaded) {
-            final todos = state.filteredTodos;
-
-            if (todos.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 64,
-                      color: Colors.grey[400],
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'No todos yet!',
-                      style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Add a todo to get started',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return Column(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(16),
-                  color: AppColors.primary.withOpacity(0.1),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStatCard('Total', state.todos.length.toString()),
-                      _buildStatCard(
-                        'Active',
-                        state.activeTodosCount.toString(),
-                      ),
-                      _buildStatCard(
-                        'Completed',
-                        state.completedTodosCount.toString(),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: todos.length,
-                    itemBuilder: (context, index) {
-                      return TodoItem(todo: todos[index]);
-                    },
-                  ),
-                ),
-              ],
-            );
-          } else if (state is TodoError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  SizedBox(height: 16),
-                  Text(
-                    'Error: ${state.message}',
-                    style: TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      context.read<TodoBloc>().add(LoadTodos());
-                    },
-                    child: Text('Retry'),
-                  ),
-                ],
-              ),
-            );
+          if (state.status == TodoStatus.loading) {
+            return const Center(child: CircularProgressIndicator());
           }
-
-          return Container();
+          if (state.tasks.isEmpty) {
+            return const Center(child: Text('No tasks yet. Tap + to add.'));
+          }
+          return ListView.builder(
+            itemCount: state.tasks.length,
+            itemBuilder: (context, index) {
+              final task = state.tasks[index];
+              return TaskItem(task: task);
+            },
+          );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showDialog(context: context, builder: (context) => AddTodoDialog());
-        },
-        backgroundColor: AppColors.primary,
-        child: Icon(Icons.add),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddDialog,
+        label: const Text('Add Task'),
+        icon: const Icon(Icons.add),
       ),
     );
   }
 
-  Widget _buildStatCard(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
+  void _showAddDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Task'),
+          content: TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Enter task title',
+            ),
+            onSubmitted: (_) => _submit(),
           ),
-        ),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-      ],
+          actions: [
+            TextButton(
+              onPressed: () {
+                _controller.clear();
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: _submit,
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isNotEmpty) {
+      context.read<TodoBloc>().add(AddTodo(text));
+      _controller.clear();
+      Navigator.of(context).pop();
+    }
   }
 }

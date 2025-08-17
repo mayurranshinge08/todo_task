@@ -1,65 +1,55 @@
-import 'dart:convert';
+import 'package:hive/hive.dart';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../models/todo.dart';
+import '../models/task.dart';
 
 class TodoRepository {
-  static const String _todosKey = 'todos';
+  static const String tasksBoxName = 'tasksBox';
 
-  Future<List<Todo>> getTodos() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final todosJson = prefs.getString(_todosKey);
+  Future<Box<Task>> _openBox() async {
+    if (Hive.isBoxOpen(tasksBoxName)) {
+      return Hive.box<Task>(tasksBoxName);
+    }
+    return await Hive.openBox<Task>(tasksBoxName);
+  }
 
-      if (todosJson == null) return [];
+  Future<List<Task>> fetchTasks() async {
+    final box = await _openBox();
+    return box.keys.map((key) {
+      final task = box.get(key)!;
+      return Task(id: key, title: task.title, isDone: task.isDone);
+    }).toList();
+  }
 
-      final List<dynamic> todosList = json.decode(todosJson);
-      return todosList.map((json) => Todo.fromJson(json)).toList();
-    } catch (e) {
-      throw Exception('Failed to load todos: $e');
+  Future<void> addTask(String title) async {
+    final box = await _openBox();
+    final task = Task(
+      id: DateTime.now().millisecondsSinceEpoch,
+      title: title,
+      isDone: false,
+    );
+    await box.put(task.id, task); // Hive auto-assigns an int key
+  }
+
+  Future<void> toggleComplete(int id) async {
+    final box = await _openBox();
+    final task = box.get(id);
+    if (task != null) {
+      final updatedTask = Task(
+        id: task.id,
+        title: task.title,
+        isDone: !task.isDone, // flip the value
+      );
+      await box.put(id, updatedTask); // save back
     }
   }
 
-  Future<void> addTodo(Todo todo) async {
-    try {
-      final todos = await getTodos();
-      todos.add(todo);
-      await _saveTodos(todos);
-    } catch (e) {
-      throw Exception('Failed to add todo: $e');
-    }
+  Future<void> deleteTask(int id) async {
+    final box = await _openBox();
+    await box.delete(id);
   }
 
-  Future<void> updateTodo(Todo todo) async {
-    try {
-      final todos = await getTodos();
-      final index = todos.indexWhere((t) => t.id == todo.id);
-
-      if (index != -1) {
-        todos[index] = todo;
-        await _saveTodos(todos);
-      } else {
-        throw Exception('Todo not found');
-      }
-    } catch (e) {
-      throw Exception('Failed to update todo: $e');
-    }
-  }
-
-  Future<void> deleteTodo(String id) async {
-    try {
-      final todos = await getTodos();
-      todos.removeWhere((todo) => todo.id == id);
-      await _saveTodos(todos);
-    } catch (e) {
-      throw Exception('Failed to delete todo: $e');
-    }
-  }
-
-  Future<void> _saveTodos(List<Todo> todos) async {
-    final prefs = await SharedPreferences.getInstance();
-    final todosJson = json.encode(todos.map((todo) => todo.toJson()).toList());
-    await prefs.setString(_todosKey, todosJson);
+  Future<void> clearAll() async {
+    final box = await _openBox();
+    await box.clear();
   }
 }
