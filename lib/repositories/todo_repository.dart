@@ -27,7 +27,7 @@ class TodoRepository {
       title: title,
       isDone: false,
     );
-    await box.put(task.id, task); // Hive auto-assigns an int key
+    await box.add(task); // Hive auto-assigns an int key
   }
 
   Future<void> toggleComplete(int id) async {
